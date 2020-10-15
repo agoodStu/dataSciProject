@@ -514,6 +514,196 @@ Julia asked her students to create some coding challenges. Write a query to prin
 
 ##### Answer
 
+这题有点难度哈。让我们屡一下思路。
+
+- 首先，要把两个表做联结，输出hacker_id, name, 和count(challenge_id)
+
+- 接下来，对分组后输出的内容做一定限制。根据题目要求，也可以分为两部分。
+
+  - 对于challenge次数最多的同学，不管是有一位，还是有许多位，都可以输出。这样，我们就可以直接找出最大的challenge次数是多少，与上个步骤中的联结表匹配。
+
+  - 第二步，题目要求，如果有两位同学challenge次数相同，且这个次数都小于最大的challenge次数，那么这些同学就不应该出现在输出表中。好像有点绕哈。
+
+    那我们**仔细想一下哈**。假设有两位同学challenge次数相同，这个次数要么大于等于最大的challenge次数，要么小于。对于第一种情况的同学，已经被前面一小步的代码**带走了**，所以不用考虑。第二种情况，则要被舍弃。
+
+    那么我们最终的输入表中，只剩下两种：1. challenge次数最大的同学；challenge次数不同的同学。第一种我们已经找到了，第二种怎么找呢？先找出challenge次数，对这个次数分组。分组后的内容就是challenge次数相同的个数。比如有49, 38, 49, 30几种challenge次数，对其分组后，则为49-2, 38-1, 30-1。我们需要的就是重复个数为1的challenge次数。再把这些challenge次数与前面的联结表匹配即可。
+
+```mysql
+SELECT
+	h.hacker_id,
+	h.NAME,
+	count( c.challenge_id ) AS challenge_created 
+FROM
+	hackers AS h
+	INNER JOIN challenges AS c ON h.hacker_id = c.hacker_id 
+GROUP BY
+	h.hacker_id,
+	h.NAME 
+HAVING
+	challenge_created = ( SELECT max( c1.cnt_c1 ) FROM ( SELECT hacker_id, count( challenge_id ) AS cnt_c1 FROM challenges GROUP BY hacker_id ) AS c1 ) 
+	OR challenge_created IN (
+	SELECT
+		c2.cnt_c2 
+	FROM
+		( SELECT count( challenge_id ) AS cnt_c2 FROM challenges GROUP BY hacker_id ) c2 
+	GROUP BY
+		c2.cnt_c2 
+	HAVING
+		count( c2.cnt_c2 ) = 1 
+	) 
+ORDER BY
+	challenge_created DESC,
+	hacker_id
+```
+
+#### Contest Leaderboard
+
+##### Problem
+
+You did such a great job helping Julia with her last coding contest challenge that she wants you to work on this one, too!
+
+The total score of a hacker is the sum of their maximum scores for all of the challenges. Write a query to print the *hacker_id*, *name*, and total score of the hackers ordered by the descending score. If more than one hacker achieved the same total score, then sort the result by ascending *hacker_id*. Exclude all hackers with a total score of 0 from your result.
+
+##### Answer
+
+通过网页中的Sample可以发现，一个hacker_id可以由多个challenge_id，并且一个challenge_id可以出现多次，最终要challenge_id中分数最高的。简单说就是，每位同学可以做很多题，每题可以提交很多次（分数最高的计入成绩），最终算每位同学的总分。这就是平常MOOC上的算法一样的。
+
+```mysql
+SELECT
+    t2.hacker_id,
+    hackers.NAME,
+    t2.total_score 
+FROM
+    (
+    SELECT
+        t1.hacker_id,
+        SUM( t1.max_score ) AS total_score 
+    FROM
+        ( SELECT hacker_id, challenge_id, max( score ) AS max_score FROM submissions GROUP BY hacker_id, challenge_id ORDER BY hacker_id, challenge_id ) AS t1 
+    GROUP BY
+        t1.hacker_id 
+    HAVING
+        total_score > 0 
+    ) AS t2
+    LEFT JOIN hackers ON t2.hacker_id = hackers.hacker_id 
+ORDER BY
+    t2.total_score DESC,
+    t2.hacker_id 
+```
+
+#### Average Population
+
+##### Problem
+
+Query the average population for all cities in **CITY**, rounded *down* to the nearest integer.
+
+##### Answer
+
+```mysql
+SELECT round(avg(population), 0) FROM city
+```
+
+#### Japan Population
+
+#### Problem
+
+Query the sum of the populations for all Japanese cities in **CITY**. The *COUNTRYCODE* for Japan is **JPN**.
+
+##### Answer
+
+```mysql
+SELECT sum(population) FROM city
+where countrycode = 'JPN'
+```
+
+#### Population Density Difference
+
+##### Problem
+
+Query the difference between the maximum and minimum populations in **CITY**.
+
+##### Answer
+
+```mysql
+SELECT MAX(population) - MIN(population) FROM city
+```
+
+#### The Blunder
+
+##### Problem
+
+Samantha was tasked with calculating the average monthly salaries for all employees in the **EMPLOYEES** table, but did not realize her keyboard's 0 key was broken until after completing the calculation. She wants your help finding the difference between her miscalculation (using salaries with any zeroes removed), and the actual average salary.
+
+Write a query calculating the amount of error (i.e.: *actual - miscalculated* average monthly salaries), and round it up to the next integer.
+
+##### Answer
+
+```mysql
+SELECT CEIL(AVG(salary) - AVG(REPLACE(salary, '0', ''))) FROM employees
+```
+
+#### Top Earners
+
+##### Problem
+
+We define an employee's *total earnings* to be their monthly *salary \* months* worked, and the *maximum total earnings* to be the maximum total earnings for any employee in the **Employee** table. Write a query to find the *maximum total earnings* for all employees as well as the total number of employees who have maximum total earnings. Then print these values as  space-separated integers.
+
+##### Answer
+
+```mysql
+SELECT
+	salary * months AS total_earning,
+	count(*) 
+FROM
+	employee 
+GROUP BY
+	total_earning 
+ORDER BY
+	total_earning DESC 
+	LIMIT 1;
+```
+
+#### Revising Aggregations - The Count Function
+
+##### Problem
+
+Query a *count* of the number of cities in **CITY** having a *Population* larger than 100, 000.
+
+##### Answer
+
+```mysql
+SELECT COUNT(*) FROM CITY
+WHERE POPULATION > 100000
+```
+
+#### Revising Aggregations - The Sum Function
+
+##### Problem
+
+Query the total population of all cities in **CITY** where *District* is **California**.
+
+##### Answer
+
+```mysql
+SELECT SUM(POPULATION) FROM CITY
+WHERE DISTRICT = 'California'
+```
+
+#### Revising Aggregations - Averages
+
+##### Problem
+
+Query the average population of all cities in **CITY** where *District* is **California**.
+
+##### Answer
+
+```mysql
+SELECT AVG(POPULATION) FROM CITY
+WHERE DISTRICT = 'California'
+```
+
+
+
 
 
 ---
@@ -521,4 +711,5 @@ Julia asked her students to create some coding challenges. Write a query to prin
 ### Update Log
 
 - 2020-10-13 20:32:35，Weather Observation Station 15
-- 2020-10-14 20:22:18，Challeges
+- 2020-10-14 20:22:18，Challegens
+- 2020-10-15 16:28:06，Aggregation part is done.
