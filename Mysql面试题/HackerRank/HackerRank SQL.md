@@ -605,7 +605,7 @@ SELECT round(avg(population), 0) FROM city
 
 #### Japan Population
 
-#### Problem
+##### Problem
 
 Query the sum of the populations for all Japanese cities in **CITY**. The *COUNTRYCODE* for Japan is **JPN**.
 
@@ -702,9 +702,223 @@ SELECT AVG(POPULATION) FROM CITY
 WHERE DISTRICT = 'California'
 ```
 
+### Advance Select
 
+#### Occupations
 
+##### Problem
 
+[Pivot](https://en.wikipedia.org/wiki/Pivot_table) the *Occupation* column in **OCCUPATIONS** so that each *Name* is sorted alphabetically and displayed underneath its corresponding *Occupation*. The output column headers should be *Doctor*, *Professor*, *Singer*, and *Actor*, respectively.
+
+**Note:** Print **NULL** when there are no more names corresponding to an occupation.
+
+##### Answer
+
+根据题意，可以发现这题包含两个问题。
+
+第一个是**转置**问题。在MySQL中，没有函数可以直接转换行和列。所以，需要自己手写。
+
+第二个是对转置后的表进行排序，要以非空值最多的的那一列为基准，按姓名排序。
+
+对于第一个问题，可以通过`CASE ... WHEN`或者`IF()`函数来实现。对于第二个问题，则需要设置变量来计数。在以计数值分组，通过max()或min()取出该值。max()或min()都一样，因为分组后的那一列中，只有一个值。
+
+```mysql
+SET @d := 0, @p := 0, @s :=0, @a := 0;
+
+select max(Doctor), max(Professor), max(Singer), max(Actor)
+from
+(
+select
+case when occupation = 'Doctor' then name else null end as Doctor,
+case when occupation = 'Professor' then name else null end as Professor,
+case when occupation = 'Singer' then name else null end as Singer, 
+case when occupation = 'Actor' then name else null end as Actor,
+case when occupation = 'Doctor' then @d := @d + 1,
+	 when occupation = 'Professor' then @p := @p + 1,
+	 when occupation = 'Singer' then @s := @s + 1,
+	 when occupation = 'Actor' then @a := @a + 1 end as rowNum
+from occupations
+order by name) as t
+group by t.rowNum
+```
+
+#### Binary Tree Nodes
+
+##### Problem
+
+You are given a table, *BST*, containing two columns: *N* and *P,* where *N* represents the value of a node in *Binary Tree*, and *P* is the parent of *N*.
+
+Write a query to find the node type of *Binary Tree* ordered by the value of the node. Output one of the following for each node:
+
+- *Root*: If node is root node.
+- *Leaf*: If node is leaf node.
+- *Inner*: If node is neither root nor leaf node.
+
+##### Answer
+
+二叉树节点。
+
+P列数父节点内容。根据二叉树特点可知：
+
+- Root节点，父节点为NULL
+- Inner节点，肯定是父节点，即在P列
+- 上诉两个节点之外的点
+
+```mysql
+SELECT
+CASE
+    WHEN
+        P IS NULL THEN
+            concat( N, ' Root' ) 
+            WHEN N IN ( SELECT DISTINCT P FROM bst ) THEN
+            concat( N, ' Inner' ) ELSE concat( N, ' Leaf' ) 
+        END 
+    FROM
+    bst
+ORDER BY N
+```
+
+#### New Companies
+
+##### Problem
+
+Amber's conglomerate corporation just acquired some new companies. Each of the companies follows this hierarchy:  `Founder --> Lead Manager --> Senior Manager --> Manager --> Empoloyee`.
+
+Given the table schemas below, write a query to print the *company_code*, *founder* name, total number of *lead* managers, total number of *senior* managers, total number of *managers*, and total number of *employees*. Order your output by ascending *company_code*.
+
+**Note:**
+
+- The tables may contain duplicate records.
+- The *company_code* is string, so the sorting should not be **numeric**. For example, if the *company_codes* are *C_1*, *C_2*, and *C_10*, then the ascending *company_codes* will be *C_1*, *C_10*, and *C_2*.
+
+##### Answer
+
+这一题吧，sample里面给了很多表，但我觉得用两个就可以。这样做的前提是每个员工都有领导。看到讨论区有人质疑这种做法，有个大哥回复说：如果一个经理没有下属，那他咋继续干下去？哈哈哈。
+
+```mysql
+select  c.company_code,
+        c.founder,
+        count(distinct e.lead_manager_code),
+        count(distinct e.senior_manager_code),
+        count(distinct e.manager_code),
+        count(distinct e.employee_code)
+from company as c
+join employee as e
+on c.company_code = e.company_code
+group by c.company_code, c.founder
+order by c.company_code
+```
+
+#### Type of Triangle
+
+##### Problem
+
+Write a query identifying the *type* of each record in the **TRIANGLES** table using its three side lengths. Output one of the following statements for each record in the table:
+
+- **Equilateral**: It's a triangle with  sides of equal length.
+- **Isosceles**: It's a triangle with  sides of equal length.
+- **Scalene**: It's a triangle with  sides of differing lengths.
+- **Not A Triangle**: The given values of *A*, *B*, and *C* don't form a triangle.
+
+**Input Format**
+
+The **TRIANGLES** table is described as follows:
+
+![img](https://s3.amazonaws.com/hr-challenge-images/12887/1443815629-ac2a843fb7-1.png)
+
+Each row in the table denotes the lengths of each of a triangle's three sides.
+
+##### Answer
+
+通过`CASE WHEN`嵌套解决。先判断是不是一个三角形，如果是，再判断是哪一种三角形。
+
+```mysql
+SELECT
+CASE        
+    WHEN
+        A + B > C 
+        AND A + C > B 
+        AND B + C > A THEN  -- 是一个三角形
+        CASE        
+                WHEN A = B 
+                AND B = C THEN 
+                    'Equilateral'  -- 等边三角形
+                    WHEN A = B 
+                    OR A = C 
+                    OR B = C THEN
+                        'Isosceles' ELSE 'Scalene' 
+                    END ELSE 'Not A Triangle' 
+                END 
+            FROM
+    triangles
+```
+
+#### The PADS
+
+##### Problem
+
+Generate the following two result sets:
+
+1. Query an *alphabetically ordered* list of all names in **OCCUPATIONS**, immediately followed by the first letter of each profession as a parenthetical (i.e.: enclosed in parentheses). For example: `AnActorName(A)`, `ADoctorName(D)`, `AProfessorName(P)`, and `ASingerName(S)`.
+
+2. Query the number of ocurrences of each occupation in **OCCUPATIONS**. Sort the occurrences in *ascending order*, and output them in the following format:
+
+   ```
+   There are a total of [occupation_count] [occupation]s.
+   ```
+
+   where `[occupation_count]` is the number of occurrences of an occupation in **OCCUPATIONS** and `[occupation]` is the *lowercase* occupation name. If more than one *Occupation* has the same `[occupation_count]`, they should be ordered alphabetically.
+
+**Note:** There will be at least two entries in the table for each type of occupation.
+
+##### Answer
+
+这题主要就是要注意`concat()`函数的使用问题。另一个需要注意的是`UNION`. 在MySQL里，当使用`UNION`拼接两个查询结果后，会生成一个**无序**结果。也就是说，原来子查询里面的`ORDER BY`失效了。查了一个MySQL的文档，官方的相关解释如下：
+
+> Use of `ORDER BY` for individual [`SELECT`](https://dev.mysql.com/doc/refman/8.0/en/select.html) statements implies nothing about the order in which the rows appear in the final result because [`UNION`](https://dev.mysql.com/doc/refman/8.0/en/union.html) by default produces an unordered set of rows. Therefore, `ORDER BY` in this context typically is used in conjunction with `LIMIT`, to determine the subset of the selected rows to retrieve for the [`SELECT`](https://dev.mysql.com/doc/refman/8.0/en/select.html), even though it does not necessarily affect the order of those rows in the final [`UNION`](https://dev.mysql.com/doc/refman/8.0/en/union.html) result. If `ORDER BY` appears without `LIMIT` in a [`SELECT`](https://dev.mysql.com/doc/refman/8.0/en/select.html), it is optimized away because it has no effect in any case.
+
+当`ORDER BY`没和`LIMIT`一起出现时，会被优化（反向优化？）。所以，要在子查询中加入`LIMIT 999`(随便填个比较大的数)，以保证最终顺序符合题目要求。
+
+```mysql
+(SELECT concat(name, '(', SUBSTR(occupation, 1, 1), ')') from occupations 
+ORDER BY name limit 999)
+UNION ALL
+(SELECT CONCAT('There are a total of ', count(*), ' ',  lcase(occupation), 's.')  FROM occupations
+GROUP BY occupation ORDER BY COUNT(*), occupation limit 999)
+```
+
+### Basic Join
+
+#### The Report
+
+You are given two tables: *Students* and *Grades*. *Students* contains three columns *ID*, *Name* and *Marks*. *Grades* contains the following data: *Grade, Min_Mark and Max_Mark*. 
+
+*Ketty* gives *Eve* a task to generate a report containing three columns: *Name*, *Grade* and *Mark*. *Ketty* doesn't want the NAMES of those students who received a grade lower than *8*. The report must be in descending order by grade -- i.e. higher grades are entered first. If there is more than one student with the same grade (8-10) assigned to them, order those particular students by their name alphabetically. Finally, if the grade is lower than 8, use "NULL" as their name and list them by their grades in descending order. If there is more than one student with the same grade (1-7) assigned to them, order those particular students by their marks in ascending order.
+
+Write a query to help Eve.
+
+##### Answer
+
+需要用到联结表。
+
+```mysql
+SELECT
+IF
+    ( g.Grade < 8, NULL, s.`Name` ),
+    g.Grade,
+  s.Marks    
+FROM
+    students AS s,
+    grades AS g 
+WHERE
+    s.Marks BETWEEN g.Min_Mark 
+    AND g.Max_Mark 
+ORDER BY
+    g.grade DESC,
+    s.`name`
+```
+
+ 
 
 ---
 
@@ -713,3 +927,5 @@ WHERE DISTRICT = 'California'
 - 2020-10-13 20:32:35，Weather Observation Station 15
 - 2020-10-14 20:22:18，Challegens
 - 2020-10-15 16:28:06，Aggregation part is done.
+- 2020-10-20 19:49:08，Advance Select part is done. 
+- 2020-10-20 20:51:20，The Report.
