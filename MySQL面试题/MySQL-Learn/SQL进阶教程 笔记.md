@@ -96,10 +96,157 @@ ORDER BY newOrder
 
 ### 1-2 自连接的用法
 
+#### 笔记
 
+##### 总结
+
+> 1. 自连接经常和非等值连接结合起来使用。
+> 2. 自连接和 GROUP BY 结合使用可以生成递归集合。
+> 3. 将自连接看作不同表之间的连接更容易理解。
+> 4. 应把表看作行的集合，用面向集合的方法来思考。
+> 5. 自连接的性能开销更大，应尽量给用于连接的列建立索引。
+
+#### 习题
+
+##### 1-2-1 可重组合
+
+```msyql
+SELECT p1.name as name_1, p2.`name` as name_2
+FROM products as p1, products as p2
+WHERE p1.name = p2.`name` or p1.`name` > p2.`name`
+```
+
+##### 1-2-2 ：分地区排序
+
+```mysql
+-- 解法一：窗口函数
+SELECT
+	district,
+	NAME,
+	price,
+	rank () over ( PARTITION BY district ORDER BY price DESC ) AS rank_1 
+FROM
+	districtproducts
+	
+-- 解法二：关联子查询 
+SELECT
+	d1.district,
+	d1.`name`,
+	d1.price,
+	(
+	SELECT
+		count( d2.price ) 
+	FROM
+		districtproducts AS d2 
+	WHERE
+		d1.price < d2.price 
+		AND d1.district = d2.district 
+	) + 1 AS rank_1 
+FROM
+	districtproducts AS d1 
+ORDER BY
+	d1.district,
+	rank_1
+
+-- 解法三：自查询
+SELECT
+	d1.district,
+	d1.`name`,
+	max( d1.price ),
+	count( d2.`name` ) + 1 AS rank_1 
+FROM
+	districtproducts AS d1
+	LEFT JOIN districtproducts AS d2 ON d1.district = d2.district 
+	AND d1.price < d2.price 
+GROUP BY
+	d1.district,
+	d1.`name` 
+ORDER BY
+	d1.district,
+	rank_1
+```
+
+#####  1-2-3 ：更新位次
+
+这一题在更新上遇到了问题，感觉csdn几位大佬解答。@evanweng  @percentfl  @qq_18379499
+
+```mysql
+-- 解法一
+UPDATE districtproducts2
+LEFT JOIN (
+SELECT
+	count( d2.`name` ) + 1 AS rank1,
+	d1.`name`,
+	d1.district 
+FROM
+	districtproducts2 AS d1
+	LEFT JOIN districtproducts2 AS d2 ON d1.district = d2.district 
+	AND d1.price < d2.price 
+GROUP BY
+	d1.district,
+	d1.`name` 
+ORDER BY
+	d1.district,
+	rank1 
+	) AS t ON ( districtproducts2.`name` = t.`name` AND districtproducts2.district = t.district ) 
+	SET ranking = t.rank1
+	
+-- 解法二
+UPDATE districtproducts2 d 
+SET d.ranking = (
+	SELECT
+		count( 1 ) + 1 
+	FROM
+		( SELECT d1.* FROM districtproducts2 d1 ) d2 
+	WHERE
+		d2.district = d.district 
+		AND d2.price > d.price 
+	)
+```
+
+
+
+### 1-3 暂缺
+
+### 1-4 HAVING子句的力量
+
+#### 笔记
+
+##### 众数
+
+主要是面向集合的思想。
+
+```mysql
+-- 解法一：ALL()函数。当有NULL时，这种方法失效。
+SELECT
+	income,
+	count(*) AS cnt 
+FROM
+	Graduates 
+GROUP BY
+	income 
+HAVING
+	cnt >= ALL ( SELECT count(*) FROM Graduates GROUP BY income ) 
+
+-- 解法二：子查询
+SELECT
+	income,
+	count(*) AS cnt 
+FROM
+	graduates 
+GROUP BY
+	income 
+HAVING
+	cnt >= (
+	SELECT
+		MAX( t.cnt2 ) 
+FROM
+	( SELECT count(*) AS cnt2 FROM graduates GROUP BY income ) AS t)
+```
 
 
 
 ## Update Log
 
 - 2020-10-21 20:31:43，自连接的用法
+- 2020-10-26 19:37:43，习题1-2-3；1-4众数
