@@ -244,6 +244,171 @@ FROM
 	( SELECT count(*) AS cnt2 FROM graduates GROUP BY income ) AS t)
 ```
 
+##### 中位数
+
+还是面向集合的思想。用自连接，按从大到小分成两个集合。两个集合重合的部分即中位数。
+
+```mysql
+SELECT
+	AVG( DISTINCT income ) 
+FROM
+	(
+	SELECT
+		g1.income 
+	FROM
+		graduates AS g1,
+		graduates AS g2 
+	GROUP BY
+		g1.income 
+	HAVING
+		SUM( CASE WHEN g2.income >= g1.income THEN 1 ELSE 0 END ) >= count(*) / 2 
+		AND SUM( CASE WHEN g2.income <= g1.income THEN 1 ELSE 0 END ) >= count(*) / 2 
+	) AS tmp
+
+```
+
+##### NULL集合
+
+`COUNT(*)`和`COUNT(列名)`的区别：
+
+- 性能
+- `count(*)`返回所有行，`count(列名)`返回的数不包括`NULL`行
+
+查找Students表中，哪些学院的学生全部提交了表格。
+
+```mysql
+-- 解法一
+select dpt from students
+GROUP BY dpt
+HAVING count(*) = count(sbmt_date)
+
+-- 解法二
+select dpt from students
+GROUP BY dpt
+HAVING count(*) = sum(case when sbmt_date is not null then 1 else 0 end)
+```
+
+##### 用关系除法运算进行购物篮分析
+
+查询囊括了表 Items 中所有商品的店铺。
+
+```mysql
+select s.shop
+shopitems as s, items as i
+where s.items = i.items
+group by s.shop
+having count(s.item) = (select count(*) from items)
+```
+
+#### 习题
+
+##### 1-4-1 ：修改编号缺失的检查逻辑，使结果总是返回一行数据
+
+```mysql
+-- 解法一：Union
+SELECT
+	'存在缺失值' AS gap 
+FROM
+	seqtbl 
+HAVING
+	count(*) <> max( seq ) UNION
+SELECT
+	'不存在缺失值' AS gap 
+FROM
+	seqtbl 
+HAVING
+	count(*) = max(seq)
+	
+-- 解法二：case when
+SELECT
+CASE
+	WHEN
+		count(*) <> max( seq ) THEN
+			'存在缺失值' ELSE '不存在缺失值' 
+			END AS gap 
+FROM
+	seqtbl
+```
+
+##### 1-4-2 ：练习“特征函数”
+
+```mysql
+-- 解法一
+SELECT
+	dpt 
+FROM
+	students 
+GROUP BY
+	dpt 
+HAVING
+	count(*) = sum(
+	CASE
+			WHEN sbmt_date BETWEEN '2005-09-01' 
+		AND '2005-09-30' THEN
+	1 ELSE 0 END)
+	
+-- 解法二：EXTRACT() 行数
+SELECT
+	dpt 
+FROM
+	students 
+GROUP BY
+	dpt 
+HAVING
+	count(*) = sum(
+	CASE
+			WHEN EXTRACT(YEAR from sbmt_date) = 2005
+		AND EXTRACT(MONTH FROM sbmt_date) = 09 THEN
+	1 ELSE 0 END)
+```
+
+##### 1-4-3 ：购物篮分析问题的一般化
+
+```mysql
+SELECT
+	shop,
+	count( s.item ) AS my_item_cnt,
+	( SELECT count( item ) FROM items ) - count( s.item ) AS diff_cnt 
+FROM
+	shopitems AS s,
+	items AS i 
+WHERE
+	s.item = i.item 
+GROUP BY
+	shop
+```
+
+### 1-5 外连接的用法
+
+#### 笔记
+
+##### 行 --> 列
+
+```mysql
+-- 解法一
+SELECT
+	c1.NAME,
+	max( CASE WHEN c1.course = 'SQL入门' THEN '○' ELSE NULL END ) AS 'SQL入门',
+	max( CASE WHEN c1.course = 'UNIX基础' THEN '○' ELSE NULL END ) AS 'UNIX基础',
+	max( CASE WHEN c1.course = 'Java中级' THEN '○' ELSE NULL END ) AS 'Java中级' 
+FROM
+	courses AS c1 
+GROUP BY
+	c1.`name`
+
+-- 解法二：
+SELECT name,
+CASE WHEN SUM(CASE WHEN course =  'SQL入门 ' THEN 1 ELSE NULL END) = 1
+THEN  ' ○ ' ELSE NULL END AS "SQL 入门",
+CASE WHEN SUM(CASE WHEN course =  'UNIX基础 ' THEN 1 ELSE NULL END) = 1
+THEN  ' ○ ' ELSE NULL END AS "UNIX 基础",
+CASE WHEN SUM(CASE WHEN course =  'Java中级 ' THEN 1 ELSE NULL END) = 1
+THEN  ' ○ ' ELSE NULL END AS "Java 中级 "
+FROM Courses
+GROUP BY name;
+
+```
+
 
 
 ## Update Log
